@@ -1,0 +1,714 @@
+package com.virtusa.gto.standout.client.examinee;
+
+import java.util.ArrayList;
+
+import com.google.gwt.core.client.GWT;
+import com.google.gwt.event.dom.client.ClickEvent;
+import com.google.gwt.event.dom.client.ClickHandler;
+import com.google.gwt.uibinder.client.UiBinder;
+import com.google.gwt.uibinder.client.UiField;
+import com.google.gwt.uibinder.client.UiHandler;
+import com.google.gwt.user.client.rpc.AsyncCallback;
+import com.google.gwt.user.client.ui.Anchor;
+import com.google.gwt.user.client.ui.Button;
+import com.google.gwt.user.client.ui.Composite;
+import com.google.gwt.user.client.ui.FlowPanel;
+import com.google.gwt.user.client.ui.HTML;
+import com.google.gwt.user.client.ui.HorizontalPanel;
+import com.google.gwt.user.client.ui.Label;
+import com.google.gwt.user.client.ui.VerticalPanel;
+import com.google.gwt.user.client.ui.Widget;
+import com.virtusa.gto.standout.client.common.AppController;
+import com.virtusa.gto.standout.client.common.StandoutDialogBox;
+import com.virtusa.gto.standout.shared.ExamConfiguration;
+import com.virtusa.gto.standout.shared.Mcq;
+import com.virtusa.gto.standout.shared.McqWrapper;
+import com.virtusa.gto.standout.shared.exceptions.ExamExpiredException;
+
+/***********************************************************************************************/
+// Version : standout 1.0
+// Source file : ExamPage.java
+// Description : Manage MCQ exams in standout
+// Creator(s) : iambanwela, nsamarasekara, snilumali, ybangamuwage
+
+// Modification History :
+
+// *------------------------------------------------*
+// |-------Date---------|------Author/(Reviewer)----|
+// |---24 Feb 2015------|------- ybangamuwage ------|
+// *------------------------------------------------*
+/***********************************************************************************************/
+public class McqExamPage extends Composite implements ExamUI {
+
+    private static McqExamPageUiBinder uiBinder = GWT.create(McqExamPageUiBinder.class);
+
+    /**
+     * McqExamPage UiBinder.
+     */
+    interface McqExamPageUiBinder extends UiBinder<Widget, McqExamPage> {
+    }
+
+    private AppController controller;
+    private boolean mcqSubmissionComplete = false;
+    private ExamPage examPage;
+    private ExamConfiguration examConfig;
+    private String problemType;
+
+    // used to track down question number , refer with Exam class problem map
+    private int tempProblemNumber;
+    // used to update answer details in sever side session
+    private int currentProblemNumber;
+    // all problem count of the exam (iq or technical)
+    private int totalQCount;
+    // to store option list of particular problem
+    private ArrayList<String> optionList = new ArrayList<String>();
+    // to store user temporary user selected answers
+    private ArrayList<String> problemAnswerList = new ArrayList<String>();
+    // to store remark questions mcqids
+    private ArrayList<Integer> remarkMap = new ArrayList<Integer>();
+
+    // used to work with progress
+    private int iqAnsCount = 0;
+
+    private int techAnsCount = 0;
+    private boolean tabSelectedStatusIQ = false;
+    private boolean tabSelectedStatusTech = false;
+    private ArrayList<Integer> iqAnswered = new ArrayList<Integer>();
+    private ArrayList<Integer> techAnswered = new ArrayList<Integer>();
+    // to show custom message boxes
+    private StandoutDialogBox standoutDialogBox = new StandoutDialogBox();
+
+    private static final Boolean TRUE = Boolean.TRUE;
+    private static final Boolean FALSE = Boolean.FALSE;
+
+    // CHECKSTYLE.OFF: VisibilityModifier - GWT UI fields cannot have private modifier.
+    @UiField
+    FlowPanel remarksPanel;
+    @UiField
+    FlowPanel mcqPanel;
+    @UiField
+    HTML currentQuestion;
+    @UiField
+    Button mcqNext;
+    @UiField
+    Button mcqBack;
+    @UiField
+    Button mcqSubmit;
+    @UiField
+    FlowPanel remarkCheckBoxDiv;
+    // CHECKSTYLE.ON: VisibilityModifier
+
+    // global remark check box
+    private CustomCheckBox remarkCheckBox = new CustomCheckBox();
+
+    /**
+     * @return the problemType
+     */
+    public final String getProblemType() {
+        return problemType;
+    }
+
+    /**
+     * @param pProblemType
+     *            the problemType to set
+     */
+    public final void setProblemType(final String pProblemType) {
+        this.problemType = pProblemType;
+    }
+
+    /**
+     * @return the iqAnsCount
+     */
+    public final int getIqAnsCount() {
+        return iqAnsCount;
+    }
+
+    /**
+     * @param pIqAnsCount
+     *            the iqAnsCount to set
+     */
+    public final void setIqAnsCount(final int pIqAnsCount) {
+        this.iqAnsCount = pIqAnsCount;
+    }
+
+    /**
+     * @return the techAnsCount
+     */
+    public final int getTechAnsCount() {
+        return techAnsCount;
+    }
+
+    /**
+     * @param pTechAnsCount
+     *            the techAnsCount to set
+     */
+    public final void setTechAnsCount(final int pTechAnsCount) {
+        this.techAnsCount = pTechAnsCount;
+    }
+
+    /**
+     * @return the tabSelectedStatusIQ
+     */
+    public final boolean isTabSelectedStatusIQ() {
+        return tabSelectedStatusIQ;
+    }
+
+    /**
+     * @param pTabSelectedStatusIQ
+     *            the tabSelectedStatusIQ to set
+     */
+    public final void setTabSelectedStatusIQ(final boolean pTabSelectedStatusIQ) {
+        this.tabSelectedStatusIQ = pTabSelectedStatusIQ;
+    }
+
+    /**
+     * @return the tabSelectedStatusTech
+     */
+    public final boolean isTabSelectedStatusTech() {
+        return tabSelectedStatusTech;
+    }
+
+    /**
+     * @param pTabSelectedStatusTech
+     *            the tabSelectedStatusTech to set
+     */
+    public final void setTabSelectedStatusTech(final boolean pTabSelectedStatusTech) {
+        this.tabSelectedStatusTech = pTabSelectedStatusTech;
+    }
+
+    /**
+     * McqExamPage constructor.
+     * 
+     * @param requestedType
+     *            requested Type(IQ, Technical)
+     */
+    public McqExamPage(final String requestedType) {
+        initWidget(uiBinder.createAndBindUi(this));
+        this.problemType = requestedType;
+    }
+
+    @Override
+    public final void initializeExamUI(final ExamPage pExamPage) {
+        // TODO Auto-generated method stub
+        this.examPage = pExamPage;
+        this.examConfig = pExamPage.getExamConfig();
+        this.controller = pExamPage.getController();
+        tempProblemNumber = 1; // used to track down problem number
+        currentProblemNumber = 1;
+
+        // create check box for make remarks
+        HorizontalPanel remarkCheckHP = new HorizontalPanel();
+        Label remarkText = new Label("Make Remark");
+        remarkText.addStyleName("optionbox-text");
+        remarkCheckHP.add(remarkCheckBox);
+        remarkCheckHP.add(remarkText);
+
+        remarkCheckBoxDiv.add(remarkCheckHP);
+        remarkCheckBox.setValue(FALSE);
+
+        // calling the remark function and add remark into remark panel
+        remarkCheckBox.addClickHandler(new ClickHandler() {
+
+            @Override
+            public void onClick(final ClickEvent event) {
+                // TODO Auto-generated method stub
+                makeRemarks(tempProblemNumber);
+            }
+        });
+    }
+
+    /**
+     * 
+     * Trigger the exam by getting first problem.
+     * 
+     */
+    public final void triggerExamIQ() {
+        // this if statement will give first problem to the user.
+        setTabSelectedStatusIQ(TRUE);
+        totalQCount = examConfig.getConfig().get("IQ");
+        setCurrentExamLocation(tempProblemNumber);
+        getProblemFromSession(currentProblemNumber, tempProblemNumber);
+
+        mcqSubmit.setEnabled(FALSE);
+    }
+
+    /**
+     * 
+     * Trigger the exam by getting first problem.
+     * 
+     */
+    public final void triggerExamTech() {
+        // this if statement will give first problem to the user.
+        setTabSelectedStatusTech(TRUE);
+        totalQCount = examConfig.getConfig().get("Technical");
+        setCurrentExamLocation(tempProblemNumber);
+        getProblemFromSession(currentProblemNumber, tempProblemNumber);
+        mcqSubmit.setEnabled(FALSE);
+    }
+
+    /**
+     * set current exam location to display.
+     * 
+     * @param currentQ
+     *            current question number
+     */
+    public final void setCurrentExamLocation(final int currentQ) {
+        currentQuestion.setHTML("<p>Question <span class=\"text-error\">" + currentQ
+                + "</span> of <span class=\"text-error\">" + totalQCount + "</span></p>");
+    }
+
+    /**
+     * 
+     * send current problem answers to server exam object and get new problem. (TempProblemNumber is new mcq ).
+     * 
+     * @param pCurrentProblemNumber
+     *            current problem number in client side
+     * @param pTempProblemNumber
+     *            requested problem number
+     */
+    public final void getProblemFromSession(final int pCurrentProblemNumber, final int pTempProblemNumber) {
+
+        // we are reference with server problem map index number,that is why we
+        // always minus 1 from temp problem number
+        controller.getRpcService().getProblem(problemType, pCurrentProblemNumber - 1, problemAnswerList,
+                pTempProblemNumber - 1, new AsyncCallback<McqWrapper>() {
+
+                    @Override
+                    public final void onSuccess(final McqWrapper result) {
+                        // TODO Auto-generated method stub
+
+                        // increment progress bar status
+                        updateProgressBar(problemType, pTempProblemNumber);
+
+                        setProblemToDisplay(result); // pass mcq to display in UI
+
+                        if (remarkMap.contains(pTempProblemNumber)) {
+                            remarkCheckBox.setChecked(TRUE);
+                        }
+                    }
+
+                    @Override
+                    public final void onFailure(final Throwable caught) {
+                        // TODO Auto-generated method stub
+                        standoutDialogBox.customDialogBox(
+                                "System error in getting problems. Please contact Administrator", "Error!", "error");
+                    }
+                });
+    }
+
+    /**
+     * 
+     * set mcq details to display it may be iq or technical mcq .
+     * 
+     * @param pCurrentMcq
+     *            current MCQ to display
+     */
+    public final void setProblemToDisplay(final McqWrapper pCurrentMcq) {
+
+        remarkCheckBox.setChecked(FALSE);
+        mcqPanel.clear();
+
+        Mcq mcq = pCurrentMcq.getCurrentMcq();
+        // add problem
+        VerticalPanel question = new VerticalPanel();
+        HTML mcqProblem = new HTML(mcq.getProblem());
+        question.add(mcqProblem);
+        mcqPanel.add(question);
+
+        // add options into option list
+        optionList.clear();
+        problemAnswerList.clear();
+
+        optionList.add(mcq.getOption1().trim());
+        optionList.add(mcq.getOption2().trim());
+        optionList.add(mcq.getOption3().trim());
+        optionList.add(mcq.getOption4().trim());
+        optionList.add(mcq.getOption5().trim());
+
+        VerticalPanel optionSet = new VerticalPanel(); // panel to add option set
+
+        for (int x = 0; x < optionList.size(); x++) {
+
+            HorizontalPanel option = new HorizontalPanel();
+            final CustomCheckBox optionCheckBox = new CustomCheckBox(tempProblemNumber, x + 1);
+
+            // click handler to get selected answers
+            optionCheckBox.addClickHandler(new ClickHandler() {
+
+                @Override
+                public void onClick(final ClickEvent event) {
+                    // TODO Auto-generated method stub
+                    setSelectedMcqAnswersToList(optionCheckBox.getId(), optionCheckBox.getValue());
+                }
+            });
+
+            Label optionText = new Label(optionList.get(x));
+            optionText.addStyleName("optionbox-text");
+            option.add(optionCheckBox);
+            option.add(optionText);
+            optionSet.add(option);
+
+            // set user selected answers if it is has otherwise check box will
+            // be false
+            if (pCurrentMcq.getSelectedProblemAnswerList() != null) {
+
+                for (String ans : pCurrentMcq.getSelectedProblemAnswerList()) {
+                    if (Integer.parseInt(ans) == x + 1) {
+                        optionCheckBox.setValue(TRUE);
+                        setSelectedMcqAnswersToList(optionCheckBox.getId(), TRUE);
+                    }
+                }
+            }
+
+        }
+        mcqPanel.add(optionSet);
+        currentProblemNumber = tempProblemNumber;
+    }
+
+    /**
+     * 
+     * used to store selected answers into problemAnswerList.
+     * 
+     * @param checkBoxId
+     *            id of the checkbox
+     * @param checked
+     *            status of the checking
+     */
+    public final void setSelectedMcqAnswersToList(final int checkBoxId, final Boolean checked) {
+
+        if (checked) {
+            problemAnswerList.add(Integer.toString(checkBoxId));
+        } else {
+            problemAnswerList.remove(Integer.toString(checkBoxId));
+
+        }
+    }
+
+    /**
+     * 
+     * using next button event get next mcq.
+     * 
+     * @param e
+     *            ClickEvent
+     */
+    @UiHandler("mcqNext")
+    final void onClick(final ClickEvent e){
+
+        mcqNext.setEnabled(FALSE);
+        mcqSubmit.setEnabled(FALSE);
+        mcqBack.setEnabled(FALSE);
+        // make reference to add current problem answers
+        currentProblemNumber = tempProblemNumber;
+        int temp = tempProblemNumber;
+
+        if (temp <= totalQCount) {
+            mcqNext.setEnabled(TRUE);
+            mcqBack.setEnabled(TRUE);
+            // only increment tempProblemNumber if it is not equal to total
+            // count
+            if (temp != totalQCount) {
+                tempProblemNumber++;
+            }
+            // increment progress bar status
+
+            // update exam location
+            setCurrentExamLocation(tempProblemNumber);
+            // get new problem
+            getProblemFromSession(currentProblemNumber, tempProblemNumber);
+        }
+
+        // set enable and disable buttons
+        if (tempProblemNumber == totalQCount) {
+            mcqSubmit.setEnabled(TRUE);
+            mcqNext.setEnabled(FALSE);
+        }
+        if (iqAnsCount == totalQCount || techAnsCount == totalQCount) {
+            mcqSubmit.setEnabled(TRUE);
+        }
+        if (mcqSubmissionComplete) {
+            mcqSubmit.setEnabled(FALSE);
+        }
+    }
+
+    /**
+     * 
+     * Update static variables to increase progress bar status.
+     * 
+     * @param pProblemType
+     *            type of the problem
+     * @param pTempProblemNumber
+     *            temp problem number
+     */
+    public final void updateProgressBar(final String pProblemType, final int pTempProblemNumber) {
+
+        if ("IQ".equals(pProblemType)) {
+            if (!iqAnswered.contains(pTempProblemNumber)) {
+                iqAnswered.add(pTempProblemNumber);
+                iqAnsCount++;
+            }
+        } else {
+            if (!techAnswered.contains(pTempProblemNumber)) {
+                techAnswered.add(pTempProblemNumber);
+                techAnsCount++;
+            }
+        }
+    }
+
+    /**
+     * 
+     * using back button event get previous mcq.
+     * 
+     * @param e
+     *            ClickEvent
+     */
+    @UiHandler("mcqBack")
+    final void onClick1(final ClickEvent e) {
+
+        mcqNext.setEnabled(FALSE);
+        mcqSubmit.setEnabled(FALSE);
+        mcqBack.setEnabled(FALSE);
+
+        if (tempProblemNumber > 0 && tempProblemNumber != 1) {
+            mcqBack.setEnabled(TRUE);
+            mcqNext.setEnabled(TRUE);
+            // make reference to add current problem answers
+            currentProblemNumber = tempProblemNumber;
+            tempProblemNumber--;
+            setCurrentExamLocation(tempProblemNumber);
+            getProblemFromSession(currentProblemNumber, tempProblemNumber);
+        }
+
+        if (tempProblemNumber == 1) {
+            mcqNext.setEnabled(TRUE);
+            mcqBack.setEnabled(FALSE);
+        }
+
+        // set enable and disable buttons
+        if (iqAnsCount == totalQCount || techAnsCount == totalQCount) {
+            mcqSubmit.setEnabled(TRUE);
+        } else {
+            mcqSubmit.setEnabled(FALSE);
+        }
+
+        if (mcqSubmissionComplete) {
+            mcqSubmit.setEnabled(FALSE);
+        }
+    }
+
+    /**
+     * 
+     * call this function when you wants to make remarks use hash map to store remarks.
+     * 
+     * @param remarkProblem
+     *            problem number to remark
+     */
+    public final void makeRemarks(final int remarkProblem) {
+
+        if (!remarkMap.contains(remarkProblem)) {
+            remarkMap.add(remarkProblem);
+            Anchor remark = new Anchor(String.valueOf(remarkProblem));
+            remark.removeStyleName("gwt-Anchor");
+            remark.setStyleName("remark-link");
+            remark.addClickHandler(new ClickHandler() {
+                @Override
+                public void onClick(final ClickEvent event) {
+                    // TODO Auto-generated method stub
+                    // make reference to add current problem answers
+                    currentProblemNumber = tempProblemNumber;
+                    tempProblemNumber = remarkProblem;
+                    setCurrentExamLocation(remarkProblem);
+                    // get new problem
+                    getProblemFromSession(currentProblemNumber, remarkProblem);
+                }
+            });
+            remarkCheckBox.setChecked(TRUE);
+            remarksPanel.add(remark);
+        } else if (remarkMap.contains(remarkProblem)) {
+
+            remarkMap.remove(Integer.valueOf(remarkProblem));
+
+            remarksPanel.clear();
+            for (final Integer rq : remarkMap) {
+                Anchor remark = new Anchor(String.valueOf(rq));
+                remark.removeStyleName("gwt-Anchor");
+                remark.setStyleName("remark-link");
+                remark.addClickHandler(new ClickHandler() {
+                    @Override
+                    public final void onClick(final ClickEvent event) {
+                        // TODO Auto-generated method stub
+                        // make reference to add current problem answers
+                        currentProblemNumber = tempProblemNumber;
+                        tempProblemNumber = rq;
+                        setCurrentExamLocation(rq);
+                        // get new problem
+                        getProblemFromSession(currentProblemNumber, rq);
+                    }
+                });
+                remarksPanel.add(remark);
+            }
+            remarkCheckBox.setChecked(FALSE);
+        }
+    }
+
+    /**
+     * 
+     * click event for the submit button .
+     * 
+     * @param e
+     *            ClickEvent
+     */
+    @UiHandler("mcqSubmit")
+    final void onClick2(final ClickEvent e) {
+
+        setCurrentExamLocation(tempProblemNumber);
+
+        makeMcqExamSubmit(currentProblemNumber, currentProblemNumber);
+        mcqSubmit.setEnabled(FALSE); // lock the submission
+    }
+
+    /**
+     * 
+     * 1)submit last problem answers that displayed in the current page 2)get score of mcq examination and display in a
+     * dialog box.
+     * 
+     * @param pCurrentProblemNumber
+     *            Current Problem Number
+     * @param pTempProblemNumber
+     *            Temp Problem Number
+     */
+    public final void makeMcqExamSubmit(final int pCurrentProblemNumber, final int pTempProblemNumber) {
+
+        controller.getRpcService().getProblem(problemType, pCurrentProblemNumber - 1, problemAnswerList,
+                pTempProblemNumber - 1, new AsyncCallback<McqWrapper>() {
+
+                    @Override
+                    public final void onSuccess(final McqWrapper result) {
+                        setProblemToDisplay(result); // pass mcq to display in UI
+                        submitExam();
+                    }
+
+                    @Override
+                    public final void onFailure(final Throwable caught) {
+                        standoutDialogBox.customDialogBox(
+                                "System error in submiting exam. Please contact Administrator", "Error!", "error");
+                    }
+                });
+    }
+
+    /**
+     * 
+     * submit and display score .
+     * 
+     */
+    public final void submitExam() {
+
+        if (examPage.isExaminationStatus() && !mcqSubmissionComplete) {
+
+            controller.getRpcService().submit(problemType, new AsyncCallback<Boolean>() {
+
+                @Override
+                public final void onSuccess(final Boolean result) {
+
+                    if (result) {
+                        mcqSubmissionComplete = true;
+                        // to identify exam is complete or not in
+                        // main exam page
+                        examPage.getGlobalExamCompletion().put(problemType, 1);
+                        // display status
+                        standoutDialogBox.customDialogBox("Successfully submitted " + problemType + " Part",
+                                "Success!", "success");
+                    } else {
+                        standoutDialogBox.customDialogBox("System error in submiting " + problemType + " Part."
+                                + "Please contact Administrator or try it again.", "Error!", "error");
+                    }
+                }
+
+                @Override
+                public final void onFailure(final Throwable caught) {
+
+                    if (caught instanceof ExamExpiredException) {
+                        standoutDialogBox.customDialogBox("Exam Expired ", "Error!", "error");
+                    } else {
+                        standoutDialogBox.customDialogBox(
+                                "System error in submiting exam. Please contact Administrator", "Error!", "error");
+                    }
+                }
+            });
+        }
+    }
+
+    /** Custom CheckBox. **/
+    // static class CustomCheckBox extends CheckBox {
+    // private int mcqId;
+    // private int id;
+    // private CheckBox checkBox;
+    //
+    // /**
+    // * Default constructor.
+    // */
+    // public CustomCheckBox() {
+    // this.checkBox = new CheckBox();
+    // }
+    //
+    // /**
+    // * parameterized constructor.
+    // *
+    // * @param pMcqId
+    // * of CustomCheckBox
+    // * @param pId
+    // * of CustomCheckBox
+    // */
+    // public CustomCheckBox(final int pMcqId, final int pId) {
+    // super();
+    // this.mcqId = pMcqId;
+    // this.id = pId;
+    // this.checkBox = new CheckBox();
+    // }
+    //
+    // /**
+    // * @return the mcqId
+    // */
+    // public final int getMcqId() {
+    // return mcqId;
+    // }
+    //
+    // /**
+    // * @param pMcqId
+    // * the mcqId to set
+    // */
+    // public final void setMcqId(final int pMcqId) {
+    // this.mcqId = pMcqId;
+    // }
+    //
+    // /**
+    // * @return the id
+    // */
+    // public final int getId() {
+    // return id;
+    // }
+    //
+    // /**
+    // * @param pId
+    // * the id to set
+    // */
+    // public final void setId(final int pId) {
+    // this.id = pId;
+    // }
+    //
+    // /**
+    // * @return the checkBox
+    // */
+    // public final CheckBox getCheckBox() {
+    // return checkBox;
+    // }
+    //
+    // /**
+    // * @param pCheckBox
+    // * the checkBox to set
+    // */
+    // public final void setCheckBox(final CheckBox pCheckBox) {
+    // this.checkBox = pCheckBox;
+    // }
+    //
+    // }
+}

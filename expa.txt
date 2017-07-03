@@ -1,0 +1,722 @@
+package com.virtusa.gto.standout.client.examinee;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import com.google.gwt.core.client.GWT;
+import com.google.gwt.dom.client.Document;
+import com.google.gwt.dom.client.Element;
+import com.google.gwt.event.dom.client.ClickEvent;
+import com.google.gwt.event.dom.client.ClickHandler;
+import com.google.gwt.event.logical.shared.SelectionEvent;
+import com.google.gwt.event.logical.shared.SelectionHandler;
+import com.google.gwt.uibinder.client.UiBinder;
+import com.google.gwt.uibinder.client.UiField;
+import com.google.gwt.user.client.Timer;
+import com.google.gwt.user.client.Window;
+import com.google.gwt.user.client.Window.ClosingEvent;
+import com.google.gwt.user.client.Window.ClosingHandler;
+import com.google.gwt.user.client.rpc.AsyncCallback;
+import com.google.gwt.user.client.ui.Anchor;
+import com.google.gwt.user.client.ui.Button;
+import com.google.gwt.user.client.ui.Composite;
+import com.google.gwt.user.client.ui.DialogBox;
+import com.google.gwt.user.client.ui.FlowPanel;
+import com.google.gwt.user.client.ui.HTML;
+import com.google.gwt.user.client.ui.IsWidget;
+import com.google.gwt.user.client.ui.Label;
+import com.google.gwt.user.client.ui.RootPanel;
+import com.google.gwt.user.client.ui.SimplePanel;
+import com.google.gwt.user.client.ui.TabLayoutPanel;
+import com.google.gwt.user.client.ui.Widget;
+import com.virtusa.gto.standout.client.common.AppController;
+import com.virtusa.gto.standout.client.common.StandoutDialogBox;
+import com.virtusa.gto.standout.shared.ExamConfiguration;
+import com.virtusa.gto.standout.shared.User;
+import com.virtusa.gto.standout.shared.events.LogoutEvent;
+
+/***********************************************************************************************/
+// Version : standout 1.0
+// Source file : ExamPage.java
+// Description : Main controll of the Exam
+// Creator(s) : iambanwela, nsamarasekara, snilumali
+
+// Modification History :
+
+// *------------------------------------------------*
+// |-------Date---------|------Author/(Reviewer)----|
+// |---23 Feb 2015------|------- ybangamuwage ------|
+// *------------------------------------------------*
+/***********************************************************************************************/
+public class ExamPage extends Composite {
+
+    private static final int VALUE_100 = 100;
+
+    private static final int VALUE_3600 = 3600;
+
+    private static final int VALUE_1000 = 1000;
+
+    private static final int VALUE_5 = 5;
+
+    private static final int VALUE_60 = 60;
+
+    private static ExamPageUiBinder uiBinder = GWT.create(ExamPageUiBinder.class);
+
+    /**
+     * ExamPage UiBinder.
+     */
+    interface ExamPageUiBinder extends UiBinder<Widget, ExamPage> {
+    }
+
+    // CHECKSTYLE.OFF: VisibilityModifier - GWT UI fields cannot have private modifier.
+    @UiField
+    TabLayoutPanel tabPane; // to add exam type objects
+    // CHECKSTYLE.ON: VisibilityModifier
+
+    private AppController controller;
+    private ExamConfiguration examConfig;
+    private User interviewer;
+    private boolean expired;
+    private boolean logStatus;
+    private Element timerDiv; // to display time duration
+    private Element progressBar; // to display exam progress as progress bar
+    // to find the exam situation that exam is still not submit or not
+    private boolean examinationStatus = true;
+
+    private HashMap<String, IsWidget> examWidgetMap = new HashMap<String, IsWidget>();
+
+    private final Button finish = new Button("Finish My Exam");
+    // to show custom message boxes
+    private StandoutDialogBox standoutDialogBox = new StandoutDialogBox();
+
+    // to identify user submit the exams or not
+    private Map<String, Integer> globalExamCompletion = new HashMap<String, Integer>();
+
+    private static final Boolean TRUE = Boolean.TRUE;
+    private static final Boolean FALSE = Boolean.FALSE;
+
+    /**
+     * @return the examinationStatus
+     */
+    public final boolean isExaminationStatus() {
+        return examinationStatus;
+    }
+
+    /**
+     * @param pExaminationStatus
+     *            the examinationStatus to set
+     */
+    public final void setExaminationStatus(final boolean pExaminationStatus) {
+        this.examinationStatus = pExaminationStatus;
+    }
+
+    /**
+     * @return the examConfig
+     */
+    public final ExamConfiguration getExamConfig() {
+        return examConfig;
+    }
+
+    /**
+     * @param pXamConfig
+     *            the examConfig to set
+     */
+    public final void setExamConfig(final ExamConfiguration pXamConfig) {
+        this.examConfig = pXamConfig;
+    }
+
+    /**
+     * @return the controller
+     */
+    public final AppController getController() {
+        return controller;
+    }
+
+    /**
+     * @param pController
+     *            the controller to set
+     */
+    public final void setController(final AppController pController) {
+        this.controller = pController;
+    }
+
+    /**
+     * @return the interviewer
+     */
+    public final User getInterviewer() {
+        return interviewer;
+    }
+
+    /**
+     * @param pInterviewer
+     *            the interviewer to set
+     */
+    public final void setInterviewer(final User pInterviewer) {
+        this.interviewer = pInterviewer;
+    }
+
+    /**
+     * @return the globalExamCompletion
+     */
+    public final Map<String, Integer> getGlobalExamCompletion() {
+        return globalExamCompletion;
+    }
+
+    /**
+     * @param pGlobalExamCompletion
+     *            the globalExamCompletion to set
+     */
+    public final void setGlobalExamCompletion(final Map<String, Integer> pGlobalExamCompletion) {
+        this.globalExamCompletion = pGlobalExamCompletion;
+    }
+
+    /**
+     * Constructor of the ExamPage.
+     *
+     * @param pController
+     *            of the ExamPage
+     * @param user
+     *            of the ExamPage
+     */
+    public ExamPage(final AppController pController, final User user) {
+
+        initWidget(uiBinder.createAndBindUi(this));
+        this.controller = pController;
+        this.interviewer = user;
+
+        this.logStatus = TRUE;
+        // this.examinationStatus = TRUE;
+        // add finish button to root panel
+        RootPanel.get("finish_button").add(finish);
+        finish.addClickHandler(new ClickHandler() {
+
+            @Override
+            public void onClick(final ClickEvent event) {
+
+                StringBuilder str = new StringBuilder(); // dynamic string to
+                // specify exam types
+                boolean checkSubmit = TRUE; // used to check whether user can
+                // finish the exam or not
+                str.append("Please submit following exams before finish : ");
+
+                for (Map.Entry<String, Integer> configExamobj : examConfig.getConfig().entrySet()) {
+                    // user not complete request exam yet
+
+                    if (globalExamCompletion.get(configExamobj.getKey()) == 0) {
+                        str.append(configExamobj.getKey().toString() + " ,");
+                        checkSubmit = TRUE;
+                    }
+                }
+                if (!checkSubmit) {
+                    String st = str.toString().substring(0, str.toString().length() - 1);
+                    // display message in custom dialog box
+                    standoutDialogBox.customDialogBox(st, "Warning !", "warning");
+                } else {
+                    // user can finish the exam
+                    customOptionDialogBox("Are you sure you want to finish?\n", "Confirm!", "info", 1);
+
+                }
+            }
+        });
+
+        // add log out link to logout user
+        Anchor logout = new Anchor("Logout");
+        logout.addStyleName("logout");
+        finish.removeStyleName("gwt-Button");
+        finish.addStyleName("btn-small btn-danger");
+        RootPanel.get("logout_button").add(logout);
+        logout.addClickHandler(new ClickHandler() {
+            @Override
+            public void onClick(final ClickEvent event) {
+                logout();
+            }
+        });
+
+        // configure exam page header
+        RootPanel.get("welcome_note").add(new Label("Welcome " + user.getFullName()));
+        Document document = Document.get();
+        timerDiv = document.getElementById("timer");
+        progressBar = document.getElementById("progressbar");
+        RootPanel.get("answerprogress").setVisible(TRUE);
+        RootPanel.get("timer").setVisible(TRUE);
+
+        // set exam object in server (add row to exams table related to user) get exam definition details to generate
+        // exam tabs finally start the timer
+
+        controller.getRpcService().getExamConfiguration(user, new AsyncCallback<ExamConfiguration>() {
+
+            @Override
+            public void onFailure(final Throwable caught) {
+                standoutDialogBox.customDialogBox("System error in creating Exam. Please contact Administrator",
+                        "Error !", "error"); // display message in custom
+                // dialog box
+            }
+
+            @Override
+            public void onSuccess(final ExamConfiguration result) {
+                setExams(result); // generate whole exam
+                startTimer(); // run timer thread
+            }
+        });
+
+        Window.addWindowClosingHandler(new ClosingHandler() {
+
+            @Override
+            public void onWindowClosing(final ClosingEvent event) {
+                if (logStatus) {
+                    event.setMessage("You cannot login again after leaving the page");
+                }
+            }
+        });
+
+    }
+
+    /**
+     *
+     * start the timer with use of exam allowed time.
+     *
+     */
+    public final void startTimer() {
+        expired = FALSE;
+        Timer t = new Timer() {
+            private int count = examConfig.getAllowedTime() * VALUE_60;
+
+            @Override
+            public void run() {
+
+                if (!expired) {
+
+                    timerDiv.setInnerHTML("<div class=\"innertimespan\">Time remaining : " + formatIntoHHMMSS(count)
+                            + "</div>");
+                    updateuserProgress();
+                    count--;
+                    if (count == 0) {
+                        timerDiv.setInnerHTML("Time up");
+                        finish.setEnabled(FALSE);
+                        expired = TRUE;
+                        // cancel the timer
+                        this.cancel();
+                        showResult();
+                    }
+                    // alert user to submit exams before 5min
+
+                    if (count == VALUE_5 * VALUE_60) {
+
+                        StringBuilder str = new StringBuilder();
+                        boolean checkSubmit = TRUE;
+                        // user not complete request exam yet
+                        for (Map.Entry<String, Integer> configExamobj : examConfig.getConfig().entrySet()) {
+
+                            if (globalExamCompletion.get(configExamobj.getKey()) == 0) {
+
+                                str.append(configExamobj.getKey().toString() + " ,");
+                                checkSubmit = FALSE;
+                            }
+                        }
+                        if (!checkSubmit) {
+                            String st = str.toString().substring(0, str.toString().length() - 1);
+                            standoutDialogBox.customDialogBox("Please submit following exams before finish : " + st,
+                                    "Warning !", "warning"); // display message in custom dialog box
+
+                        }
+                    }
+
+                }
+
+            }
+        };
+        // Schedule the timer to run once every second, 1000 ms.
+        t.scheduleRepeating(VALUE_1000);
+    }
+
+    /**
+     *
+     * format the allowed time of the exam.
+     *
+     * @param secondsIn
+     *            time in seconds
+     * @return formatted time
+     */
+    public final String formatIntoHHMMSS(final int secondsIn) {
+
+        int hours = secondsIn / VALUE_3600, 
+                remainder = secondsIn % VALUE_3600, 
+                minutes = remainder / VALUE_60, 
+                seconds = remainder % VALUE_60;
+        if (hours > 0) {
+            return hours + " hr : " + minutes + "min : " + seconds + " s";
+        } else {
+            return minutes + "min : " + seconds + " s";
+        }
+    }
+
+    /**
+     *
+     * using factory design create exam tabs.
+     *
+     * @param pXamConfig
+     *            ExamConfiguration of the logged interviewee
+     */
+    public final void setExams(final ExamConfiguration pXamConfig) {
+
+        InstructionPage instructionPage = new InstructionPage(controller, interviewer, 1);
+        tabPane.add(instructionPage, "Exam Instructions");
+        this.examConfig = pXamConfig;
+        ExamUIFactory examFactory = new ExamUIFactory();
+
+        // add sample Programming tab if Programming exam exsites in the config.
+        if (examConfig.getConfig().containsKey("Programming")) {
+
+            SampleProblem sampleProblem = new SampleProblem("Programming");
+            sampleProblem.initializeExamUI(this);
+            tabPane.add(sampleProblem, "Example Answer");
+        }
+
+        for (Map.Entry<String, Integer> configExamobj : examConfig.getConfig().entrySet()) {
+            // add exam tabs into tab pane
+            IsWidget examWidget = examFactory.assembleExam(configExamobj.getKey(), this);
+
+            tabPane.add(examWidget, configExamobj.getKey());
+            examWidgetMap.put(configExamobj.getKey(), examWidget);
+
+            // add exam requested types into globalExamCompletion
+            globalExamCompletion.put(configExamobj.getKey(), 0);
+        }
+
+        tabPane.addSelectionHandler(new SelectionHandler<Integer>() {
+            @Override
+            public void onSelection(final SelectionEvent<Integer> event) {
+                int tabId = event.getSelectedItem();
+                Widget tabWidget = tabPane.getWidget(tabId);
+
+                if (tabWidget instanceof ComprehensionExam && !((ComprehensionExam) tabWidget).isTabSelectedStatus()) {
+                    ComprehensionExam comprExam = (ComprehensionExam) tabWidget;
+                    comprExam.triggerExam();
+                }
+                if (tabWidget instanceof McqExamPage) {
+                    McqExamPage mcqPage = (McqExamPage) tabWidget;
+
+                    String problemType = mcqPage.getProblemType();
+                    if ("IQ".equals(problemType) && !mcqPage.isTabSelectedStatusIQ()) {
+                        mcqPage.triggerExamIQ();
+                    } else if ("Technical".equals(problemType) && !mcqPage.isTabSelectedStatusTech()) {
+                        mcqPage.triggerExamTech();
+                    }
+                }
+                if (tabWidget instanceof ProgrammingExam && !((ProgrammingExam) tabWidget).isTabSelectedStatus()) {
+                    ProgrammingExam progmingExam = (ProgrammingExam) tabWidget;
+                    progmingExam.triggerExam();
+                }
+                if (tabWidget instanceof SampleProblem && !((SampleProblem) tabWidget).isTabSelectedStatus()) {
+                    SampleProblem sampleProblem = (SampleProblem) tabWidget;
+                    sampleProblem.triggerExam();
+                }
+            }
+        });
+
+        tabPane.setSize("100%", "524px");
+
+        if (examConfig.getConfig().containsKey("Programming")) {
+            tabPane.selectTab(2);
+        } else {
+            tabPane.selectTab(1);
+        }
+
+    }
+
+    /**
+     *
+     make user log out.
+     */
+    public final void logout() {
+
+        if (examinationStatus) {
+            standoutDialogBox.customDialogBox("Finish the exam before logging out", "Heads up!", "info"); // display
+            // message in custom dialog box
+        } else {
+            if (expired) {
+                controller.getRpcService().logout(new AsyncCallback<Boolean>() {
+
+                    @Override
+                    public void onSuccess(final Boolean result) {
+                        if (result == TRUE) {
+                            logStatus = FALSE;
+
+                        } else {
+                            // display message in custom dialog box
+                            standoutDialogBox.customDialogBox("Session alreay expired", "Error!", "error");
+                        }
+                        expired = true;
+                        RootPanel.get("welcome_note").remove(0);
+                        RootPanel.get("finish_button").remove(0);
+                        RootPanel.get("logout_button").remove(0);
+                        RootPanel.get("answerprogress").setVisible(false);
+                        RootPanel.get("timer").setVisible(false);
+
+                        timerDiv.setInnerHTML("&nbsp;");
+                        progressBar.setInnerHTML("&nbsp;");
+                        AppController.EVENT_BUS.fireEvent(new LogoutEvent(true));
+                        Window.Location.reload();
+                    }
+
+                    @Override
+                    public void onFailure(final Throwable caught) {
+                        // display message in custom dialog box
+                        standoutDialogBox.customDialogBox("Logging out failed. Please contact Administrator",
+                                "Logging out failed!", "error");
+
+                    }
+                });
+            } else {
+                customOptionDialogBox("Are you sure you want to logout?\n", "Confirm!", "info", 2);
+
+            }
+        }
+    }
+
+    /**
+     *
+     * Confirm logout.
+     */
+    public final void confirmLogOut() {
+
+        controller.getRpcService().logout(new AsyncCallback<Boolean>() {
+
+            @Override
+            public void onSuccess(final Boolean result) {
+                if (result == TRUE) {
+                    logStatus = FALSE;
+
+                } else {
+                    standoutDialogBox.customDialogBox("Session alreay expired", "Error!", "error");
+                }
+                expired = true;
+                RootPanel.get("welcome_note").remove(0);
+                RootPanel.get("finish_button").remove(0);
+                RootPanel.get("logout_button").remove(0);
+                RootPanel.get("answerprogress").setVisible(FALSE);
+                RootPanel.get("timer").setVisible(FALSE);
+
+                timerDiv.setInnerHTML("&nbsp;");
+                progressBar.setInnerHTML("&nbsp;");
+                AppController.EVENT_BUS.fireEvent(new LogoutEvent(TRUE));
+            }
+
+            @Override
+            public void onFailure(final Throwable caught) {
+                standoutDialogBox.customDialogBox("Logging out failed. Please contact Administrator",
+                        "Logging out failed!", "error");
+            }
+        });
+
+    }
+
+    /**
+     *
+     * get result summary from the user session and display result summary.
+     */
+    public final void showResult() {
+
+        examinationStatus = FALSE;
+        expired = TRUE;
+        timerDiv.setInnerHTML("Exam finished.");
+        RootPanel.get("finish_button").setVisible(FALSE);
+        RootPanel.get("answerprogress").setVisible(FALSE);
+        RootPanel.get("timer").setVisible(FALSE);
+        RootPanel.get("progressbar").setVisible(FALSE);
+        controller.showExamSummaryPage(interviewer, this);
+    }
+
+    /**
+     * custom option dialog box to replace default browser option alert box.
+     *
+     * @param displayText
+     *            text to display.
+     * @param dialogHeader
+     *            dialogbox header
+     * @param displayType
+     *            request type of the display
+     * @param type
+     *            request type of the dialogbox
+     */
+    public final void customOptionDialogBox(final String displayText, final String dialogHeader,
+            final String displayType, final int type) {
+
+        final DialogBox dialogbox = new DialogBox(FALSE);
+        dialogbox.setStyleName("dialog-zindex row ");
+        FlowPanel dialogBoxContents = new FlowPanel();
+
+        dialogBoxContents.setStyleName("span4 dialog-box-custom dialog-content");
+        HTML heder = null;
+        if ("error".equals(displayType)) {
+            heder =
+                    new HTML("<div class=\"alert-vcodejudge alert-vcodejudge-error inherit-width\"><h5>" + dialogHeader
+                            + "</h5></div>");
+        } else if ("success".equals(displayType)) {
+            heder =
+                    new HTML("<div class=\"alert-vcodejudge alert-vcodejudge-success inherit-width\"><h5>"
+                            + dialogHeader + "</h5></div>");
+        } else if ("warning".equals(displayType)) {
+            heder =
+                    new HTML("<div class=\"alert-vcodejudge alert-block-vcodejudge inherit-width\"><h5>" + dialogHeader
+                            + "</h5></div>");
+        } else if ("info".equals(displayType)) {
+            heder =
+                    new HTML("<div class=\"alert-vcodejudge alert-vcodejudge-info inherit-width\"><h5>" + dialogHeader
+                            + "</h5></div>");
+        }
+
+        dialogBoxContents.add(heder);
+        dialogBoxContents.add(new Label(displayText));
+        SimplePanel space = new SimplePanel();
+        space.setSize("100%", "4px");
+        dialogBoxContents.add(space);
+
+        // add yes and no button to the option box
+        FlowPanel userInputsDiv = new FlowPanel();
+        Button yesbutton = new Button("Yes");
+        yesbutton.setStyleName("btn pull-right");
+        SimplePanel yesholder = new SimplePanel();
+        yesholder.add(yesbutton);
+        yesbutton.addClickHandler(new ClickHandler() {
+
+            @Override
+            public void onClick(final ClickEvent event) {
+
+                // finish the exam
+                if (type == 1) {
+                    showResult();
+                } else if (type == 2) {
+                    // log out
+                    confirmLogOut();
+                }
+                dialogbox.hide();
+
+            }
+        });
+
+        Button nobutton = new Button("No");
+        nobutton.setStyleName("btn pull-right");
+        SimplePanel noholder = new SimplePanel();
+        noholder.add(nobutton);
+        nobutton.addClickHandler(new ClickHandler() {
+
+            @Override
+            public void onClick(final ClickEvent event) {
+                dialogbox.hide();
+            }
+        });
+
+        userInputsDiv.add(nobutton);
+        userInputsDiv.add(yesbutton);
+        dialogBoxContents.add(userInputsDiv);
+
+        dialogbox.setWidget(dialogBoxContents);
+
+        dialogbox.setGlassEnabled(true);
+        dialogbox.center();
+
+    }
+
+    /**
+     *
+     * update user Progress.
+     */
+    public final void updateuserProgress() {
+
+        String progressString = "<div class=\"progress \">";
+        int allProblemCount = 0;
+
+        // to get total problem count
+        for (Map.Entry<String, Integer> configExamobj : examConfig.getConfig().entrySet()) {
+
+            int val = examConfig.getConfig().get(configExamobj.getKey());
+            String key = configExamobj.getKey();
+
+            if ("IQ".equals(key)) {
+                allProblemCount = allProblemCount + val;
+            } else if ("Comprehension".equals(key)) {
+                allProblemCount = allProblemCount + val - 1;
+            } else if ("Technical".equals(key)) {
+                allProblemCount = allProblemCount + val;
+            } else if ("Programming".equals(key)) {
+                allProblemCount = allProblemCount + val;
+            }
+        }
+
+        for (Map.Entry<String, Integer> configExamobj : examConfig.getConfig().entrySet()) {
+
+            if ("IQ".equals(configExamobj.getKey())) {
+
+                int ansCount = ((McqExamPage) examWidgetMap.get("IQ")).getIqAnsCount();
+
+                double curntIQProgress = (ansCount * 1.0 / allProblemCount) * VALUE_100;
+                double notCmpletedIQProgress =
+                        ((examConfig.getConfig().get(configExamobj.getKey()) - ansCount) * 1.0 / (allProblemCount))
+                        * VALUE_100;
+                progressString =
+                        progressString
+                        + "<div class=\"bar bar-danger\" style=\"width:"
+                        + curntIQProgress
+                        + "%;\"><span class=\"progressSpan\">IQ</span>" 
+                        + "<span class=\"progressSpanChanged\">IQ</span></div>" 
+                        + "<div class=\"bar bar-clr\" style=\"width:"
+                        + notCmpletedIQProgress + "%;\"></div>";
+
+            } else if ("Comprehension".equals(configExamobj.getKey())) {
+
+                int ansCount = ((ComprehensionExam) examWidgetMap.get("Comprehension")).getCompreAnsCount();
+
+                double curntIQProgress = ((ansCount) * 1.0 / (allProblemCount)) * VALUE_100;
+                double notCmpletedIQProgress =
+                        ((examConfig.getConfig().get(configExamobj.getKey()) - ansCount) * 1.0 / (allProblemCount))
+                        * VALUE_100;
+                progressString =
+                        progressString
+                        + "<div class=\"bar bar-warning\" style=\"width:"
+                        + curntIQProgress
+                        + "%;\"><span class=\"progressSpan\">Comprehension</span>" 
+                        + "<span class=\"progressSpanChanged\">Comp</span></div>" 
+                        + "<div class=\"bar bar-clr\" style=\"width:"
+                        + notCmpletedIQProgress + "%;\"></div>";
+
+            } else if ("Technical".equals(configExamobj.getKey())) {
+
+                int ansCount = ((McqExamPage) examWidgetMap.get("Technical")).getTechAnsCount();
+
+                double curntIQProgress = (ansCount * 1.0 / allProblemCount) * VALUE_100;
+                double notCmpletedIQProgress =
+                        ((examConfig.getConfig().get(configExamobj.getKey()) - ansCount) * 1.0 / (allProblemCount))
+                        * VALUE_100;
+                progressString =
+                        progressString
+                        + "<div class=\"bar bar-success\" style=\"width:"
+                        + curntIQProgress
+                        + "%;\"><span class=\"progressSpan\">Technical</span>" 
+                        + "<span class=\"progressSpanChanged\">Tech</span></div>" 
+                        + "<div class=\"bar bar-clr\" style=\"width:"
+                        + notCmpletedIQProgress + "%;\"></div>";
+
+            } else if ("Programming".equals(configExamobj.getKey())) {
+
+                int ansCount = ((ProgrammingExam) examWidgetMap.get("Programming")).getProgrammingAnsCount();
+
+                double curntIQProgress = (ansCount * 1.0 / (allProblemCount)) * VALUE_100;
+                double notCmpletedIQProgress =
+                        ((examConfig.getConfig().get(configExamobj.getKey()) - ansCount) * 1.0 / (allProblemCount))
+                        * VALUE_100;
+                progressString =
+                        progressString
+                        + "<div class=\"bar\" style=\"width:"
+                        + curntIQProgress
+                        + "%;\"><span class=\"progressSpan\">Programming</span>" 
+                        + "<span class=\"progressSpanChanged\">Pro</span></div>" 
+                        + "<div class=\"bar bar-clr\" style=\"width:"
+                        + notCmpletedIQProgress + "%;\"></div>";
+            }
+        }
+
+        progressString = progressString + "</div>";
+        progressBar.setInnerHTML(progressString);
+    }
+}
